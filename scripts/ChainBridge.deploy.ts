@@ -1,7 +1,8 @@
 import hre from 'hardhat';
 const ethers = hre.ethers;
 
-const ChainBridgeaddress = ""
+const RinkebyChainBridgeAddress = "0xE0FcDbf2F50cdBCd44C1bbc91bB2d5A0754A15A5"
+const BinanceSmartChainBridgeAddress = "0x2d8ecB8Dd7a70E49f70F5224AF7573078Ec20052"
 
 async function main() {
     const [owner] = await ethers.getSigners()
