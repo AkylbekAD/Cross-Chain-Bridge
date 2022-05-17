@@ -4,7 +4,6 @@ import { ethers } from "hardhat";
 import { Contract } from "ethers"
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { solidity } from "ethereum-waffle"
-import { Bytecode } from "hardhat/internal/hardhat-network/stack-traces/model";
 
 chai.use(solidity);
 
@@ -153,6 +152,26 @@ describe("ChainBridge contract", function () {
       SwapInitialized = swapping.events[1].args
     })
 
+    it("chainIdfrom and erc20from address must be valid", async function() {
+      let msg = ethers.utils.solidityKeccak256(
+        ["address", "uint256", "uint256", "address"],
+        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], acc1.address]
+      )
+
+      let signature = await acc1.signMessage(ethers.utils.arrayify(msg))
+      let sig = ethers.utils.splitSignature(signature)
+
+      expect(ChainBridgeRIN.connect(acc1).redeem(
+        SwapInitialized[1],
+        ethers.utils.formatUnits(SwapInitialized[2], 0),
+        ethers.utils.formatUnits(SwapInitialized[3], 0),
+        acc1.address,
+        SwapInitialized[6],
+        sig.v, sig.r, sig.s
+        )
+      ).to.be.revertedWith("Chain id or ERC20 address from is not valid")
+    })
+
     it("CheckSign function must return 'true' to require redeem function", async function() {
       let msg = ethers.utils.solidityKeccak256(["address", "uint256"], [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0)])
       let signature = await acc1.signMessage(ethers.utils.arrayify(msg))
@@ -170,7 +189,11 @@ describe("ChainBridge contract", function () {
     })
 
     it("If signature is valid, function redeem will mint tokens to recepient", async function() {
-      let msg = ethers.utils.solidityKeccak256(["address", "uint256"], [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0)])
+      let msg = ethers.utils.solidityKeccak256(
+        ["address", "uint256", "uint256", "address"],
+        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], SwapInitialized[4]]
+      )
+
       let signature = await owner.signMessage(ethers.utils.arrayify(msg))
       let sig = ethers.utils.splitSignature(signature)
       ///@dev initializing redeem function with validator signature
@@ -188,7 +211,11 @@ describe("ChainBridge contract", function () {
     })
 
     it("Account cant use same singature to redeem twice", async function() {
-      let msg = ethers.utils.solidityKeccak256(["address", "uint256"], [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0)])
+      let msg = ethers.utils.solidityKeccak256(
+        ["address", "uint256", "uint256", "address"],
+        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], SwapInitialized[4]]
+      )
+
       let signature = await owner.signMessage(ethers.utils.arrayify(msg))
       let sig = ethers.utils.splitSignature(signature)
       ///@dev initializing redeem function with validator signature

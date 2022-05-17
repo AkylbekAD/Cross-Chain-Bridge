@@ -9,6 +9,7 @@ import "solidity-coverage";
 import "hardhat-gas-reporter"
 import "hardhat-contract-sizer"
 
+import "./tasks/ChainBridge.tasks"
 
 dotenv.config();
 

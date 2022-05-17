@@ -14,8 +14,6 @@ contract ChainBridge is AccessControl{
 
     constructor() {
         validator = msg.sender;
-        isERC20valid[4][0x58Dea97d56BAF80aFec00B48A2FC158E7703Fe80] = true;
-        isERC20valid[97][0x125281199964620d35d63886F492b79415926661] = true;
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(ADMIN_ROLE, msg.sender);
     }
@@ -42,9 +40,9 @@ contract ChainBridge is AccessControl{
         _revokeRole(ADMIN_ROLE, account);
     }
 
-    function checkSign(address recepient, uint256 amount, uint8 v, bytes32 r, bytes32 s) public view returns (bool) {
+    function checkSign(address recepient, uint256 amount, uint256 chainIdfrom, address erc20from, uint8 v, bytes32 r, bytes32 s) public view returns (bool) {
         bytes32 message = keccak256(
-            abi.encodePacked(recepient, amount)
+            abi.encodePacked(recepient, amount, chainIdfrom, erc20from)
         );
 
         address addr = ecrecover(hashMessage(message), v, r, s);
@@ -65,17 +63,18 @@ contract ChainBridge is AccessControl{
         emit SwapInitialized(msg.sender, recepient, amount, chainIdfrom, erc20from, chainIdto, erc20to);
     }
 
-    function redeem(address recepient, uint256 amount, uint256 chainId, address erc20from, address erc20to, uint8 v, bytes32 r, bytes32 s) external {
-        require(checkSign(recepient, amount, v, r, s), "Input is not valid");
+    function redeem(address recepient, uint256 amount, uint256 chainIdfrom, address erc20from, address erc20to, uint8 v, bytes32 r, bytes32 s) external {
+        require(isERC20valid[chainIdfrom][erc20from], "Chain id or ERC20 address from is not valid");
+        require(checkSign(recepient, amount, chainIdfrom, erc20from, v, r, s), "Input is not valid");
 
-        bytes32 redeemHash = keccak256(abi.encodePacked(recepient, amount, v, r, s));
+        bytes32 redeemHash = keccak256(abi.encodePacked(recepient, amount, chainIdfrom, erc20from, v, r, s));
         redeemStatus[redeemHash] = Status.Undone;
 
         require(redeemStatus[redeemHash] == Status.Undone, "Hash is not valid");
 
         redeemStatus[redeemHash] = Status.Done;
         IExampleToken(erc20to).mint(recepient, amount);
-        emit RedeemInitialized(recepient, amount, erc20to, chainId, erc20from);
+        emit RedeemInitialized(recepient, amount, erc20to, chainIdfrom, erc20from);
     }
 
     function updateERC20ById(uint256 chainId, address erc20address, bool valid) external isAdmin {
