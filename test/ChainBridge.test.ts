@@ -75,18 +75,23 @@ describe("ChainBridge contract", function () {
     it("Should return validator address", async function() {
       expect(await ChainBridgeRIN.validator()).to.equal(owner.address)
       expect(await ChainBridgeBSC.validator()).to.equal(owner.address)
-      })
+    })
+
+    it("Should return chainID of blockchain which contract at", async function() {
+      expect(await ChainBridgeRIN.getChainID()).to.equal("1337")
+      expect(await ChainBridgeBSC.getChainID()).to.equal("1337")
+    })
   })
 
   describe("swap function", function() {
     it("Bridge id and erc20 address must be valid", async function() {
-      expect(ChainBridgeRIN.swap(acc1.address, 100000000, 1337, TokenRINaddress , 1, "0x0000000000000000000000000000000000000000")).to.be.revertedWith("Chain id or ERC20 address to is not valid")
-      expect(ChainBridgeBSC.swap(acc1.address, 100000000, 1, "0x0000000000000000000000000000000000000000", 1337, TokenRINaddress)).to.be.revertedWith("Chain id or ERC20 address from is not valid")
+      expect(ChainBridgeRIN.swap(acc1.address, 100000000, TokenRINaddress, 1, "0x0000000000000000000000000000000000000000")).to.be.revertedWith("Chain id or ERC20 address to is not valid")
+      expect(ChainBridgeBSC.swap(acc1.address, 100000000, "0x0000000000000000000000000000000000000000", 1337, TokenRINaddress)).to.be.revertedWith("ERC20 address from is not valid")
     })
 
     it("Account can swap his avalibale tokens to the ChainBridge and emit SwapInitialized", async function() {
-        const swapping = await ChainBridgeRIN.connect(acc1).swap(acc2.address, 100000000000000, 1337, TokenRINaddress, 1337, TokenBSCaddress)
-        expect(swapping).to.emit(ChainBridgeRIN, "SwapInitialized").withArgs(acc1.address, acc2.address, "100000000000000", "1337", TokenRINaddress, "1337", TokenBSCaddress)
+        const swapping = await ChainBridgeRIN.connect(acc1).swap(acc2.address, 100000000000000, TokenRINaddress, 1337, TokenBSCaddress)
+        expect(swapping).to.emit(ChainBridgeRIN, "SwapInitialized").withArgs(acc1.address, acc2.address, "100000000000000", "1337", TokenRINaddress, "1337", TokenBSCaddress, "1")
         expect(await TokenRINInterface.balanceOf(acc1.address)).to.be.equal(`${1000000000000000 - 100000000000000}`)
       })
   })
@@ -146,7 +151,7 @@ describe("ChainBridge contract", function () {
   describe("redeem function", function() {
     beforeEach(async function() {
       ///@dev before redeem, swap must be initialized to get event SwapInitialized
-      let swapping = await ChainBridgeRIN.connect(acc1).swap(acc2.address, 100000000000000, 1337, TokenRINaddress, 1337, TokenBSCaddress)
+      let swapping = await ChainBridgeRIN.connect(acc1).swap(acc2.address, 100000000000000, TokenRINaddress, 1337, TokenBSCaddress)
       swapping = await swapping.wait()
       ///@dev getting event array from swap function to input it values to redeem function
       SwapInitialized = swapping.events[1].args
@@ -154,8 +159,8 @@ describe("ChainBridge contract", function () {
 
     it("chainIdfrom and erc20from address must be valid", async function() {
       let msg = ethers.utils.solidityKeccak256(
-        ["address", "uint256", "uint256", "address"],
-        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], acc1.address]
+        ["address", "uint256", "uint256", "address", "uint256"],
+        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], acc1.address, SwapInitialized[7]]
       )
 
       let signature = await acc1.signMessage(ethers.utils.arrayify(msg))
@@ -165,11 +170,33 @@ describe("ChainBridge contract", function () {
         SwapInitialized[1],
         ethers.utils.formatUnits(SwapInitialized[2], 0),
         ethers.utils.formatUnits(SwapInitialized[3], 0),
-        acc1.address,
+        acc1.address, // wrong ERC20 from address
         SwapInitialized[6],
+        SwapInitialized[7],
         sig.v, sig.r, sig.s
         )
       ).to.be.revertedWith("Chain id or ERC20 address from is not valid")
+    })
+
+    it("ERC20 address on current chain must be valid", async function() {
+      let msg = ethers.utils.solidityKeccak256(
+        ["address", "uint256", "uint256", "address", "uint256"],
+        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], SwapInitialized[4], SwapInitialized[7]]
+      )
+
+      let signature = await acc1.signMessage(ethers.utils.arrayify(msg))
+      let sig = ethers.utils.splitSignature(signature)
+
+      expect(ChainBridgeRIN.connect(acc1).redeem(
+        SwapInitialized[1],
+        ethers.utils.formatUnits(SwapInitialized[2], 0),
+        ethers.utils.formatUnits(SwapInitialized[3], 0),
+        SwapInitialized[4],
+        acc1.address, // wrong ERC20 to address
+        SwapInitialized[7],
+        sig.v, sig.r, sig.s
+        )
+      ).to.be.revertedWith("ERC20 on this chain is not valid")
     })
 
     it("CheckSign function must return 'true' to require redeem function", async function() {
@@ -183,6 +210,7 @@ describe("ChainBridge contract", function () {
         ethers.utils.formatUnits(SwapInitialized[3], 0),
         SwapInitialized[4],
         SwapInitialized[6],
+        SwapInitialized[7],
         sig.v, sig.r, sig.s
         )
       ).to.be.revertedWith("Input is not valid")
@@ -190,8 +218,8 @@ describe("ChainBridge contract", function () {
 
     it("If signature is valid, function redeem will mint tokens to recepient", async function() {
       let msg = ethers.utils.solidityKeccak256(
-        ["address", "uint256", "uint256", "address"],
-        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], SwapInitialized[4]]
+        ["address", "uint256", "uint256", "address", "uint256"],
+        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], SwapInitialized[4], SwapInitialized[7]]
       )
 
       let signature = await owner.signMessage(ethers.utils.arrayify(msg))
@@ -203,6 +231,7 @@ describe("ChainBridge contract", function () {
         ethers.utils.formatUnits(SwapInitialized[3], 0),
         SwapInitialized[4],
         SwapInitialized[6],
+        SwapInitialized[7],
         sig.v, sig.r, sig.s
         )
       await redeeming.wait()
@@ -212,8 +241,8 @@ describe("ChainBridge contract", function () {
 
     it("Account cant use same singature to redeem twice", async function() {
       let msg = ethers.utils.solidityKeccak256(
-        ["address", "uint256", "uint256", "address"],
-        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], SwapInitialized[4]]
+        ["address", "uint256", "uint256", "address", "uint256"],
+        [SwapInitialized[1], ethers.utils.formatUnits(SwapInitialized[2], 0), SwapInitialized[3], SwapInitialized[4], SwapInitialized[7]]
       )
 
       let signature = await owner.signMessage(ethers.utils.arrayify(msg))
@@ -225,6 +254,7 @@ describe("ChainBridge contract", function () {
         ethers.utils.formatUnits(SwapInitialized[3], 0),
         SwapInitialized[4],
         SwapInitialized[6],
+        SwapInitialized[7],
         sig.v, sig.r, sig.s
         )
       await redeeming.wait()
@@ -235,6 +265,7 @@ describe("ChainBridge contract", function () {
         ethers.utils.formatUnits(SwapInitialized[3], 0),
         SwapInitialized[4],
         SwapInitialized[6],
+        SwapInitialized[7],
         sig.v, sig.r, sig.s
         )).to.be.revertedWith("Hash is not valid")
     })

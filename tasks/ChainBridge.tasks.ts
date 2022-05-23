@@ -1,7 +1,9 @@
 import { task } from "hardhat/config";
 
-const ChainBridgeAddress = "0x1a96eB10dc90CF8c9d255160B5095C708AB274E0"
-
+const ChainBridgeAddress = "0x992A58374550483C6dA7Bfe67764fC7D8Afd3a17" // for RINKEBY testnetwork
+/* 
+const ChainBridgeAddress = "0x09801CF826d876E6cc2aa32f6127b099C8D0EA2C" // for BSC testnetwork
+*/
 task("updateERC20ById", "Update ERC20 address on chainId to 'true' or 'false' at ChainBridge")
     .addParam("id", "Chain id of blockchain")
     .addParam("address", "ERC20 address at certain blockchain")
